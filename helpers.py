@@ -1,4 +1,5 @@
 from config import web3, CHAIN_ID, MARKET_ADDRESS, token_contract, market_contract
+from web3.exceptions import ContractLogicError
 
 def approve_token_if_needed(addr, pk, amount):
     current_allowance = token_contract.functions.allowance(addr, MARKET_ADDRESS).call()
@@ -34,13 +35,38 @@ def pay_energy(addr, pk, kwh, price_per_kwh=1):
     approve_token_if_needed(addr, pk, total_cost)
 
     nonce = web3.eth.get_transaction_count(addr, "pending")
-    tx = market_contract.functions.payEnergy(addr, kwh, price_per_kwh_wei).build_transaction({
+    tx = market_contract.functions.payEnergy(
+        addr,  # buyer
+        kwh,
+        price_per_kwh_wei
+    ).build_transaction({
         "chainId": CHAIN_ID,
-        "gas": 200000,
+        "gas": 250000,
+        "gasPrice": int(web3.eth.gas_price * 1.2),
+        "nonce": nonce
+    })
+
+    signed_tx = web3.eth.account.sign_transaction(tx, pk)
+    tx_hash = web3.eth.send_raw_transaction(signed_tx.raw_transaction)
+
+    try:
+        receipt = web3.eth.wait_for_transaction_receipt(tx_hash)
+        print(f"✅ {addr} ซื้อ {kwh} kWh @ {price_per_kwh} PALM/kWh, tx={web3.to_hex(tx_hash)}")
+        return receipt
+    except ContractLogicError as e:
+        print(f"❌ การจ่ายเงินล้มเหลว: {e}")
+        return None
+
+
+def reset_energy(addr, pk):
+    nonce = web3.eth.get_transaction_count(addr, "pending")
+    tx = market_contract.functions.resetEnergy().build_transaction({
+        "chainId": CHAIN_ID,
+        "gas": 100000,
         "gasPrice": int(web3.eth.gas_price * 1.2),
         "nonce": nonce
     })
     signed_tx = web3.eth.account.sign_transaction(tx, pk)
     tx_hash = web3.eth.send_raw_transaction(signed_tx.raw_transaction)
-    print(f"✅ {addr} จ่าย {total_cost/1e18} PALM ({kwh} kWh @ {price_per_kwh} PALM/kWh), tx={web3.to_hex(tx_hash)}")
+    print(f"🧹 {addr} resetEnergy(), tx={web3.to_hex(tx_hash)}")
     web3.eth.wait_for_transaction_receipt(tx_hash)

@@ -22,26 +22,36 @@ TOKEN_ABI = [
 ]
 
 MARKET_ABI = [
-    {"inputs":[
-        {"internalType":"uint256","name":"generated","type":"uint256"},
-        {"internalType":"uint256","name":"consumed","type":"uint256"}
-    ],
-     "name":"reportEnergy",
-     "outputs":[],
-     "stateMutability":"nonpayable",
-     "type":"function"
+    {
+        "inputs":[
+            {"internalType":"uint256","name":"generated","type":"uint256"},
+            {"internalType":"uint256","name":"consumed","type":"uint256"}
+        ],
+        "name":"reportEnergy",
+        "outputs":[],
+        "stateMutability":"nonpayable",
+        "type":"function"
     },
-    {"inputs":[
-        {"internalType":"address","name":"buyer","type":"address"},
-        {"internalType":"uint256","name":"kwh","type":"uint256"},
-        {"internalType":"uint256","name":"pricePerKwh","type":"uint256"}
-    ],
-     "name":"payEnergy",
-     "outputs":[],
-     "stateMutability":"nonpayable",
-     "type":"function"
+    {
+        "inputs":[
+            {"internalType":"address","name":"buyer","type":"address"},
+            {"internalType":"uint256","name":"kwh","type":"uint256"},
+            {"internalType":"uint256","name":"pricePerKwh","type":"uint256"}
+        ],
+        "name":"payEnergy",
+        "outputs":[],
+        "stateMutability":"nonpayable",
+        "type":"function"
+    },
+    {
+        "inputs":[],
+        "name":"resetEnergy",
+        "outputs":[],
+        "stateMutability":"nonpayable",
+        "type":"function"
     }
 ]
+
 
 token_contract = web3.eth.contract(address=TOKEN_ADDRESS, abi=TOKEN_ABI)
 market_contract = web3.eth.contract(address=MARKET_ADDRESS, abi=MARKET_ABI)

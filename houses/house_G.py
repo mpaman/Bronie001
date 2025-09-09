@@ -5,7 +5,8 @@ from dotenv import load_dotenv
 import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from helpers import report_energy, pay_energy
+from helpers import report_energy, pay_energy, reset_energy
+from web3.exceptions import ContractLogicError
 
 load_dotenv()
 
@@ -23,9 +24,14 @@ try:
         report_energy(ADDRESS, PRIVATE_KEY, gen, con)
 
         if net < 0:
-            pay_energy(ADDRESS, PRIVATE_KEY, abs(net))
+            try:
+                pay_energy(ADDRESS, PRIVATE_KEY, abs(net))
+            except ContractLogicError as e:
+                print(f"⚠️ จ่ายเงินไม่สำเร็จ (ไม่มีผู้ขายพลังงาน) → {e}")
 
-        time.sleep(30)
+
+        time.sleep(300)
 
 except KeyboardInterrupt:
-    print("🚪 ออกจากโปรแกรมแล้ว")
+    print("🚪 ออกจากโปรแกรมแล้ว → resetEnergy()")
+    reset_energy(ADDRESS, PRIVATE_KEY)
