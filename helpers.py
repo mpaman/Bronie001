@@ -29,14 +29,18 @@ def report_energy(addr, pk, gen, con):
     print(f"📡 {addr} รายงาน Energy → ผลิต {gen}, ใช้ {con}, tx={web3.to_hex(tx_hash)}")
     web3.eth.wait_for_transaction_receipt(tx_hash)
 
+
 def pay_energy(addr, pk, kwh, price_per_kwh=1):
     price_per_kwh_wei = int(price_per_kwh * 10**18)
     total_cost = kwh * price_per_kwh_wei
+
+    # ✅ ตรวจ approve ก่อน
     approve_token_if_needed(addr, pk, total_cost)
 
+    # ✅ สร้าง transaction
     nonce = web3.eth.get_transaction_count(addr, "pending")
     tx = market_contract.functions.payEnergy(
-        addr,  # buyer
+        addr,
         kwh,
         price_per_kwh_wei
     ).build_transaction({
@@ -51,12 +55,35 @@ def pay_energy(addr, pk, kwh, price_per_kwh=1):
 
     try:
         receipt = web3.eth.wait_for_transaction_receipt(tx_hash)
+
+        # ✅ ตรวจสถานะ
+        if receipt["status"] == 0:
+            # ลองดึง reason (บาง network อาจจะไม่ได้)
+            try:
+                reason = market_contract.functions.payEnergy(
+                    addr, kwh, price_per_kwh_wei
+                ).call({"from": addr})
+            except ContractLogicError as e:
+                reason = str(e)
+
+            print(f"❌ การจ่ายเงินล้มเหลว, reason={reason}, tx={web3.to_hex(tx_hash)}")
+            return None
+
+        # ✅ ผ่าน
         print(f"✅ {addr} ซื้อ {kwh} kWh @ {price_per_kwh} PALM/kWh, tx={web3.to_hex(tx_hash)}")
         return receipt
+
     except ContractLogicError as e:
-        print(f"❌ การจ่ายเงินล้มเหลว: {e}")
+        print(f"❌ ContractLogicError: {str(e)}")
         return None
 
+    except ValueError as e:
+        print(f"❌ ValueError: {str(e)}")
+        return None
+
+    except Exception as e:
+        print(f"❌ Unknown error: {str(e)}")
+        return None
 
 def reset_energy(addr, pk):
     nonce = web3.eth.get_transaction_count(addr, "pending")
