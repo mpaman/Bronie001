@@ -44,7 +44,6 @@ def reset_energy(address, private_key):
 
 ROLE = 1  # SELL_ONLY
 
-
 def main():
     try:
         while True:
@@ -62,7 +61,6 @@ def main():
     except KeyboardInterrupt:
         print("🚪 ออกจากโปรแกรมแล้ว → resetEnergy()")
         reset_energy(ADDRESS, PRIVATE_KEY)
-
 
 main()
 import random
