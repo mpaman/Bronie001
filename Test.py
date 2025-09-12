@@ -1,4 +1,3 @@
-
 import time
 import os
 import sys
@@ -23,10 +22,12 @@ SCALE = 1000  # แปลง float → int (milli-kWh)
 # -------------------------------
 # Modbus SDM120 setup
 # -------------------------------
+
+
+# --- SDM120 Modbus setup ---
 dev_addr = 11
 serial_port = 'COM1'
 baudrate = 2400
-
 rs485 = minimalmodbus.Instrument(serial_port, dev_addr)
 rs485.serial.baudrate = baudrate
 rs485.serial.bytesize = 8
@@ -36,13 +37,15 @@ rs485.serial.timeout  = 0.5
 rs485.debug = False
 rs485.mode = minimalmodbus.MODE_RTU
 
+
 # -------------------------------
 # SQLite
 # -------------------------------
 def init_db():
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
-    cur.execute("""
+    cur.execute(
+        """
         CREATE TABLE IF NOT EXISTS energy_log (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             total_generated REAL,
@@ -51,29 +54,38 @@ def init_db():
             delta_consumed REAL,
             ts TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
-    """)
+    """
+    )
     conn.commit()
     conn.close()
+
 
 def get_last_total():
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
-    cur.execute("SELECT total_generated, total_consumed FROM energy_log ORDER BY id DESC LIMIT 1")
+    cur.execute(
+        "SELECT total_generated, total_consumed FROM energy_log ORDER BY id DESC LIMIT 1"
+    )
     row = cur.fetchone()
     conn.close()
     if row:
         return row[0], row[1]
     return 0.000, 0.000
 
+
 def save_energy(total_gen, total_con, delta_gen, delta_con):
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
-    cur.execute("""
+    cur.execute(
+        """
         INSERT INTO energy_log (total_generated, total_consumed, delta_generated, delta_consumed)
         VALUES (?, ?, ?, ?)
-    """, (total_gen, total_con, delta_gen, delta_con))
+    """,
+        (total_gen, total_con, delta_gen, delta_con),
+    )
     conn.commit()
     conn.close()
+
 
 # -------------------------------
 # Loop
@@ -84,7 +96,7 @@ def save_energy(total_gen, total_con, delta_gen, delta_con):
 # -------------------------------
 app = Flask(__name__)
 
-DASHBOARD_TEMPLATE = '''
+DASHBOARD_TEMPLATE = """
 <html>
 <head>
     <title>House A Dashboard</title>
@@ -95,14 +107,33 @@ DASHBOARD_TEMPLATE = '''
         th { background: #eee; }
         h2 { margin-top: 2em; }
     </style>
+    <script>
+    function fetchData() {
+        fetch('/data').then(r => r.json()).then(data => {
+            document.getElementById('gen').textContent = data.current.total_generated;
+            document.getElementById('con').textContent = data.current.total_consumed;
+            document.getElementById('net').textContent = data.current.net;
+            // update history table
+            let tbody = document.getElementById('history-body');
+            tbody.innerHTML = '';
+            data.history.forEach(row => {
+                let tr = document.createElement('tr');
+                tr.innerHTML = `<td>${row.id}</td><td>${row.total_generated}</td><td>${row.total_consumed}</td><td>${row.delta_generated}</td><td>${row.delta_consumed}</td><td>${row.ts}</td>`;
+                tbody.appendChild(tr);
+            });
+        });
+    }
+    setInterval(fetchData, 2000);
+    window.onload = fetchData;
+    </script>
 </head>
 <body>
     <h1>🏠 House A Dashboard</h1>
     <h2>Current Status</h2>
     <ul>
-        <li><b>Total Generated:</b> {{ current.total_generated }} kWh</li>
-        <li><b>Total Consumed:</b> {{ current.total_consumed }} kWh</li>
-        <li><b>Net:</b> {{ current.net }} kWh</li>
+        <li><b>Total Generated:</b> <span id="gen">{{ current.total_generated }}</span> kWh</li>
+        <li><b>Total Consumed:</b> <span id="con">{{ current.total_consumed }}</span> kWh</li>
+        <li><b>Net:</b> <span id="net">{{ current.net }}</span> kWh</li>
     </ul>
     <h2>History (latest 50)</h2>
     <table>
@@ -114,6 +145,7 @@ DASHBOARD_TEMPLATE = '''
             <th>Δ Consumed</th>
             <th>Timestamp</th>
         </tr>
+        <tbody id="history-body">
         {% for row in history %}
         <tr>
             <td>{{ row['id'] }}</td>
@@ -124,10 +156,19 @@ DASHBOARD_TEMPLATE = '''
             <td>{{ row['ts'] }}</td>
         </tr>
         {% endfor %}
+        </tbody>
     </table>
 </body>
 </html>
-'''
+"""
+from flask import jsonify
+@app.route("/data")
+def dashboard_data():
+    data = get_dashboard_data()
+    # Convert rows to dict for JSON
+    data['history'] = [dict(row) for row in data['history']]
+    return jsonify(data)
+
 
 def get_dashboard_data():
     conn = sqlite3.connect(DB_PATH)
@@ -135,7 +176,9 @@ def get_dashboard_data():
     cur = conn.cursor()
     cur.execute("SELECT * FROM energy_log ORDER BY id DESC LIMIT 50")
     rows = cur.fetchall()
-    cur.execute("SELECT total_generated, total_consumed FROM energy_log ORDER BY id DESC LIMIT 1")
+    cur.execute(
+        "SELECT total_generated, total_consumed FROM energy_log ORDER BY id DESC LIMIT 1"
+    )
     last = cur.fetchone()
     conn.close()
     if last:
@@ -145,25 +188,29 @@ def get_dashboard_data():
         total_generated = 0.0
         total_consumed = 0.0
     return {
-        'current': {
-            'total_generated': total_generated,
-            'total_consumed': total_consumed,
-            'net': round(total_generated - total_consumed, 5)
+        "current": {
+            "total_generated": total_generated,
+            "total_consumed": total_consumed,
+            "net": round(total_generated - total_consumed, 5),
         },
-        'history': rows
+        "history": rows,
     }
+
 
 @app.route("/")
 def dashboard():
     data = get_dashboard_data()
     return render_template_string(DASHBOARD_TEMPLATE, **data)
 
+
 def run_dashboard():
     app.run(host="0.0.0.0", port=5000, debug=False, use_reloader=False)
+
 
 def start_dashboard_thread():
     t = threading.Thread(target=run_dashboard, daemon=True)
     t.start()
+
 
 init_db()
 start_dashboard_thread()
@@ -172,7 +219,8 @@ try:
     while True:
         last_gen, last_con = get_last_total()
 
-        # อ่านไฟจาก Modbus
+        # --- Read from SDM120 Modbus ---
+        # 0x0156: Total Active Energy (kWh)
         total_gen = rs485.read_float(0x0156, functioncode=4, number_of_registers=2)
         total_con = 0.0  # บ้านนี้ยังไม่ใช้ไฟ
 
@@ -182,7 +230,9 @@ try:
         save_energy(total_gen, total_con, delta_gen, delta_con)
 
         net = total_gen - total_con
-        print(f"\n🏠 House A → ผลิตรวม {total_gen:.5f}, ใช้รวม {total_con:.5f} = Net {net:.5f} kWh")
+        print(
+            f"\n🏠 House A → ผลิตรวม {total_gen:.5f}, ใช้รวม {total_con:.5f} = Net {net:.5f} kWh"
+        )
 
         # ส่งค่า delta เข้า contract
         gen_int = int(delta_gen * SCALE)
@@ -192,7 +242,7 @@ try:
         if net < 0:
             pay_energy(ADDRESS, PRIVATE_KEY, int(abs(net) * SCALE))
 
-        time.sleep(300)
+        time.sleep(5)  # 5 วินาทีเพื่อทดสอบง่าย
 
 except KeyboardInterrupt:
     print("🚪 ออกจากโปรแกรม → resetEnergy()")
